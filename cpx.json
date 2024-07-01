@@ -1,0 +1,50 @@
+{
+    "type": "record",
+    "name": "clientparams",
+    "fields": [
+      {
+        "name": "agent_ip",
+        "type": "string"
+      },
+      {
+        "name": "dest_ip",
+        "type": "string"
+      },
+      {
+        "name": "ipType",
+        "type": {
+          "type": "enum",
+          "name": "IpType",
+          "symbols": ["IPTYPE_IPV4", "IPTYPE_IPV6", "IPTYPE_INVALID"]
+        }
+      },
+      {
+        "name": "protType",
+        "type": {
+          "type": "enum",
+          "name": "ProtType",
+          "symbols": ["PROTTYPE_ICMP", "PROTTYPE_TCP", "PROTTYPE_UNSUPPORTED"]
+        }
+      },
+      {
+        "name": "interval",
+        "type": "int"
+      },
+      {
+        "name": "id",
+        "type": "int"
+      },
+      {
+        "name": "state",
+        "type": {
+          "type": "enum",
+          "name": "SessionState",
+          "symbols": ["SESSION_STATE_RUNNING", "SESSION_STATE_STOPPING", "SESSION_STATE_STOPPED"]
+        }
+      },
+      {
+        "name": "port",
+        "type": "int"
+      }
+    ]
+  }
