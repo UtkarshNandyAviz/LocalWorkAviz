@@ -8,13 +8,6 @@
 #include <avro/Writer.hh>
 #include "../SES_NWSLA_Collector/src/nwsla_coll_defs.h"
 
-enum DatumType {
-    DATUM_IP_TYPE,
-    DATUM_PROT_TYPE,
-    DATUM_SESSION_STATE,
-    DATUM_OTHER
-};
-
 const std::string schema_json_result = R"({
   "type": "record",
   "name": "latencyresult",
@@ -149,53 +142,20 @@ inline std::string to_string(SessionState state) {
     }
 }
 
-std::string datumToString(const avro::GenericDatum& datum, DatumType datumType) {
-    if (datum.type() == avro::AVRO_INT) {
-        int intValue = datum.value<int>();
-        switch (datumType) {
-            case DATUM_IP_TYPE:
-                switch (intValue) {
-                    case IPTYPE_IPV4: return "IPTYPE_IPV4";
-                    case IPTYPE_IPV6: return "IPTYPE_IPV6";
-                    case IPTYPE_INVALID: return "IPTYPE_INVALID";
-                }
-                break;
-            case DATUM_PROT_TYPE:
-                switch (intValue) {
-                    case PROTTYPE_ICMP: return "PROTTYPE_ICMP";
-                    case PROTTYPE_TCP: return "PROTTYPE_TCP";
-                    case PROTTYPE_UNSUPPORTED: return "PROTTYPE_UNSUPPORTED";
-                }
-                break;
-            case DATUM_SESSION_STATE:
-                switch (intValue) {
-                    case SESSION_STATE_RUNNING: return "SESSION_STATE_RUNNING";
-                    case SESSION_STATE_STOPPING: return "SESSION_STATE_STOPPING";
-                    case SESSION_STATE_STOPPED: return "SESSION_STATE_STOPPED";
-                }
-                break;
-            case DATUM_OTHER:
-                return std::to_string(intValue);
-        }
-    }
-    return "";
-}
-
-
 clientparams cp = {
-  "192.168.1.1", 
-  "192.168.1.2", 
-  IPTYPE_IPV4,
-  PROTTYPE_TCP, 
-  1000, 
-  1, 
-  SESSION_STATE_RUNNING , 
-  8080
+  "100.000.000", 
+  "999.999.999", 
+  IPTYPE_IPV6,
+  PROTTYPE_ICMP, 
+  7991, 
+  7, 
+  SESSION_STATE_STOPPING , 
+  8900
 };
 
 latencyresult lr = {
-  "192.168.1.1",
-  SESSION_STATE_RUNNING,
+  "100.000.000",
+  SESSION_STATE_STOPPED,
   3,
   4,
   5,
@@ -282,6 +242,60 @@ std::vector<uint8_t> NwSlaClientSerializeToAvro(const clientparams& c, const std
     return serialized_data;
 }
 
+void NwSlaClientDeserializeFromAvro(const std::vector<uint8_t>& serialized_data, const std::string& structSchema) {
+    try {
+        // Compile the Avro schema
+        std::istringstream schema_stream(structSchema);
+        avro::ValidSchema schema;
+        avro::compileJsonSchema(schema_stream, schema);
+
+        // Initialize input stream and decoder
+        std::unique_ptr<avro::InputStream> input_stream = avro::memoryInputStream(serialized_data.data(), serialized_data.size());
+        avro::DecoderPtr decoder = avro::binaryDecoder();
+        decoder->init(*input_stream);
+
+        // Decode Avro datum
+        avro::GenericDatum datum(schema);
+        avro::decode(*decoder, datum);
+
+        // Access GenericRecord fields
+        avro::GenericRecord& record = datum.value<avro::GenericRecord>();
+
+        // Print or process fields
+        std::cout << "agent_ip: " << record.fieldAt(0).value<std::string>() << std::endl;
+        std::cout << "dest_ip: " << record.fieldAt(1).value<std::string>() << std::endl;
+
+        // Handle ipType as an enum
+        avro::GenericEnum ipTypeEnum = record.fieldAt(2).value<avro::GenericEnum>();
+        int ipTypeIndex = ipTypeEnum.value(); // Get the enum index
+        IpType ipTypeValue = static_cast<IpType>(ipTypeIndex);
+        std::cout << "ipType: " << to_string(ipTypeValue) << std::endl;
+
+        // Handle protType as an enum
+        avro::GenericEnum protTypeEnum = record.fieldAt(3).value<avro::GenericEnum>();
+        int protTypeIndex = protTypeEnum.value(); // Get the enum index
+        ProtType protTypeValue = static_cast<ProtType>(protTypeIndex);
+        std::cout << "protType: " << to_string(protTypeValue) << std::endl;
+
+        std::cout << "interval: " << record.fieldAt(4).value<int>() << std::endl;
+        std::cout << "id: " << record.fieldAt(5).value<int>() << std::endl;
+
+        // Handle state as an enum
+        avro::GenericEnum stateEnum = record.fieldAt(6).value<avro::GenericEnum>();
+        int stateIndex = stateEnum.value(); // Get the enum index
+        SessionState stateValue = static_cast<SessionState>(stateIndex);
+        std::cout << "state: " << to_string(stateValue) << std::endl;
+
+        std::cout << "port: " << record.fieldAt(7).value<int>() << std::endl;
+
+    } catch (const avro::Exception& e) {
+        std::cerr << "Avro exception: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Standard exception: " << e.what() << std::endl;
+    } catch (...) {
+        std::cerr << "Unknown exception occurred" << std::endl;
+    }
+}
 
 const std::vector<uint8_t> NwSlaSerializeToAvro(){
   std::vector<uint8_t> client_serial = NwSlaClientSerializeToAvro(cp, schema_json_client);
@@ -301,34 +315,6 @@ const std::vector<uint8_t> NwSlaSerializeToAvro(){
 
 }
 
-void NwSlaClientDeserializeFromAvro(const std::vector<uint8_t>& serialized_data, const std::string& structSchema) {
-    try {
-        std::istringstream schema_stream(structSchema);
-        avro::ValidSchema schema;
-        avro::compileJsonSchema(schema_stream, schema);
 
-        std::unique_ptr<avro::InputStream> input_stream = avro::memoryInputStream(serialized_data.data(), serialized_data.size());
-        avro::DecoderPtr decoder = avro::binaryDecoder();
-        decoder->init(*input_stream);
 
-        avro::GenericDatum datum(schema);
-        avro::decode(*decoder, datum);
 
-        avro::GenericRecord& record = datum.value<avro::GenericRecord>();
-
-        std::cout << "agent_ip: " << record.fieldAt(0).value<std::string>() << std::endl;
-        std::cout << "dest_ip: " << record.fieldAt(1).value<std::string>() << std::endl;
-        std::cout << "ipType: " << (record.fieldAt(2), DATUM_IP_TYPE) << std::endl;
-        std::cout << "protType: " << datumToString(record.fieldAt(3), DATUM_PROT_TYPE) << std::endl;
-        std::cout << "interval: " << record.fieldAt(4).value<int>() << std::endl;
-        std::cout << "id: " << record.fieldAt(5).value<int>() << std::endl;
-        std::cout << "state: " << datumToString(record.fieldAt(6), DATUM_SESSION_STATE) << std::endl;
-        std::cout << "port: " << record.fieldAt(7).value<int>() << std::endl;
-    } catch (const avro::Exception& e) {
-        std::cerr << "Avro exception: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "Standard exception: " << e.what() << std::endl;
-    } catch (...) {
-        std::cerr << "Unknown exception occurred" << std::endl;
-    }
-}
