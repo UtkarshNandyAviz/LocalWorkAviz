@@ -167,7 +167,7 @@ latencyresult lr = {
   7
 };
 
-std::vector<uint8_t> NwSlaResultSerializeToAvro(const latencyresult& result, const std::string& structSchema) {
+std::string NwSlaResultSerializeToAvro(const latencyresult& result, const std::string& structSchema) {
     std::istringstream schema_stream(structSchema);
     avro::ValidSchema schema;
     avro::compileJsonSchema(schema_stream, schema);
@@ -193,26 +193,27 @@ std::vector<uint8_t> NwSlaResultSerializeToAvro(const latencyresult& result, con
 
     avro::encode(*encoder, datum);
 
-    std::vector<uint8_t> serialized_data;
+    std::ostringstream serialized_data_stream;
     std::unique_ptr<avro::InputStream> input_stream = avro::memoryInputStream(*output_stream);
     const uint8_t* data;
     size_t len;
 
     while (input_stream->next(&data, &len)) {
-        serialized_data.insert(serialized_data.end(), data, data + len);
+        serialized_data_stream.write(reinterpret_cast<const char*>(data), len);
     }
 
-    return serialized_data;
+    return serialized_data_stream.str();
+
 }
 
 
-void NwSlaResultDeserializeFromAvro(const std::vector<uint8_t>& serialized_data, const std::string& structSchema) {
+void NwSlaResultDeserializeFromAvro(const std::string& serialized_data, const std::string& structSchema) {
     try {
         std::istringstream schema_stream(structSchema);
         avro::ValidSchema schema;
         avro::compileJsonSchema(schema_stream, schema);
 
-        std::unique_ptr<avro::InputStream> input_stream = avro::memoryInputStream(serialized_data.data(), serialized_data.size());
+        std::unique_ptr<avro::InputStream> input_stream = avro::memoryInputStream(reinterpret_cast<const uint8_t*>(serialized_data.data()), serialized_data.size());
         avro::DecoderPtr decoder = avro::binaryDecoder();
         decoder->init(*input_stream);
 
@@ -229,11 +230,6 @@ void NwSlaResultDeserializeFromAvro(const std::vector<uint8_t>& serialized_data,
         SessionState stateValue = static_cast<SessionState>(stateIndex);
         std::cout << "state: " << to_string(stateValue) << std::endl;
 
-        //avro::GenericEnum protTypeEnum = record.fieldAt(1).value<avro::GenericEnum>();
-        //int protTypeIndex = protTypeEnum.value(); // Get the enum index
-        //ProtType protTypeValue = static_cast<ProtType>(protTypeIndex);
-        //std::cout << "protType: " << to_string(protTypeValue) << std::endl;
-
         std::cout << "timestamp: " << record.fieldAt(2).value<int>() << std::endl;
         std::cout << "packets_sent: " << record.fieldAt(3).value<int>() << std::endl;
         std::cout << "packets_received: " << record.fieldAt(4).value<int>() << std::endl;
@@ -243,8 +239,6 @@ void NwSlaResultDeserializeFromAvro(const std::vector<uint8_t>& serialized_data,
         std::cout << "rtt_avg: " << record.fieldAt(8).value<int>() << std::endl;
         std::cout << "rtt_max: " << record.fieldAt(9).value<int>() << std::endl;
         std::cout << "rtt_mdev: " << record.fieldAt(10).value<int>() << std::endl;
-       // std::cout << "k: " << record.fieldAt(10).value<int>() << std::endl;
-
 
     } catch (const avro::Exception& e) {
         std::cerr << "Avro exception: " << e.what() << std::endl;
@@ -255,7 +249,7 @@ void NwSlaResultDeserializeFromAvro(const std::vector<uint8_t>& serialized_data,
     }
 }
 
-std::vector<uint8_t> NwSlaClientSerializeToAvro(const clientparams& c, const std::string& structSchema) {
+std::string NwSlaClientSerializeToAvro(const clientparams& c, const std::string& structSchema) {
     std::istringstream schema_stream(structSchema);
     avro::ValidSchema schema;
     avro::compileJsonSchema(schema_stream, schema);
@@ -278,19 +272,20 @@ std::vector<uint8_t> NwSlaClientSerializeToAvro(const clientparams& c, const std
 
     avro::encode(*encoder, datum);
 
-    std::vector<uint8_t> serialized_data;
+    std::ostringstream serialized_data_stream;
     std::unique_ptr<avro::InputStream> input_stream = avro::memoryInputStream(*output_stream);
     const uint8_t* data;
     size_t len;
 
     while (input_stream->next(&data, &len)) {
-        serialized_data.insert(serialized_data.end(), data, data + len);
+        serialized_data_stream.write(reinterpret_cast<const char*>(data), len);
     }
 
-    return serialized_data;
+    return serialized_data_stream.str();
+
 }
 
-void NwSlaClientDeserializeFromAvro(const std::vector<uint8_t>& serialized_data, const std::string& structSchema) {
+void NwSlaClientDeserializeFromAvro(const std::string& serialized_data, const std::string& structSchema) {
     try {
         // Compile the Avro schema
         std::istringstream schema_stream(structSchema);
@@ -298,7 +293,7 @@ void NwSlaClientDeserializeFromAvro(const std::vector<uint8_t>& serialized_data,
         avro::compileJsonSchema(schema_stream, schema);
 
         // Initialize input stream and decoder
-        std::unique_ptr<avro::InputStream> input_stream = avro::memoryInputStream(serialized_data.data(), serialized_data.size());
+        std::unique_ptr<avro::InputStream> input_stream = avro::memoryInputStream(reinterpret_cast<const uint8_t*>(serialized_data.data()), serialized_data.size());
         avro::DecoderPtr decoder = avro::binaryDecoder();
         decoder->init(*input_stream);
 
@@ -346,12 +341,11 @@ void NwSlaClientDeserializeFromAvro(const std::vector<uint8_t>& serialized_data,
     }
 }
 
-void NwSlaSerializeToAvro(const clientparams& params, const latencyresult& result){
-  const std::vector<uint8_t> serialized_client =  NwSlaClientSerializeToAvro(params, schema_json_client);
-  NwSlaClientDeserializeFromAvro(serialized_client, schema_json_client);
-  std::cout << "\n";
-  const std::vector<uint8_t> serialized_result =  NwSlaResultSerializeToAvro(result, schema_json_result);
-  NwSlaResultDeserializeFromAvro(serialized_result, schema_json_result);
+std::string NwSlaSerializeToAvro(const clientparams& params, const latencyresult& result){
+  std::string serialized_client =  NwSlaClientSerializeToAvro(params, schema_json_client);
+  std::string serialized_result =  NwSlaResultSerializeToAvro(result, schema_json_result);
+  std::string concatenatedData = serialized_client + serialized_result;
+  return concatenatedData;
 }
 
 

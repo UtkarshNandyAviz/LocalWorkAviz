@@ -1,7 +1,8 @@
 #include "convert.hh"
 
 int main(){
-    NwSlaSerializeToAvro(cp, lr);
+    std::string result = NwSlaSerializeToAvro(cp, lr);
+    std::cout << result << std::endl;
 }
 
 
